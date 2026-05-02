@@ -10,11 +10,9 @@ from location_scripts.get_nearby_hospitals import get_nearby_hospitals
 # Load environment variables
 load_dotenv()
 
-EMAIL_SENDER = os.getenv("ALERT_EMAIL_SENDER")
-EMAIL_PASSWORD = os.getenv("ALERT_EMAIL_PASSWORD")
-EMAIL_RECEIVER = os.getenv("ALERT_EMAIL_RECEIVER")
-
-print("ENV LOADED:", EMAIL_SENDER, EMAIL_PASSWORD)
+EMAIL_SENDER = os.getenv("ALERT_EMAIL_SENDER") or os.getenv("KINETICS_SENDER_EMAIL")
+EMAIL_PASSWORD = os.getenv("ALERT_EMAIL_PASSWORD") or os.getenv("KINETICS_SENDER_PASS")
+EMAIL_RECEIVER = os.getenv("ALERT_EMAIL_RECEIVER") or os.getenv("KINETICS_RECIPIENT_EMAIL")
 
 def send_fall_alert_email(fall_detected, latitude, longitude, user_name):
     if not fall_detected:
@@ -22,7 +20,8 @@ def send_fall_alert_email(fall_detected, latitude, longitude, user_name):
         return
 
     if not all([EMAIL_SENDER, EMAIL_PASSWORD, EMAIL_RECEIVER]):
-        raise ValueError("Missing environment variables for email credentials.")
+        print("❌ Missing email credentials. Set ALERT_EMAIL_* or KINETICS_* environment variables.")
+        return
 
     # Get nearby hospitals
     hospitals = get_nearby_hospitals(latitude, longitude)

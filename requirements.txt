@@ -1,8 +1,12 @@
 requests
 flask
+Flask-Cors
 gunicorn
 numpy
 scipy
 scikit-learn
 joblib
 python-dotenv
+pandas
+matplotlib
+xgboost

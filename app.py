@@ -3,6 +3,7 @@ from flask_cors import CORS
 import os
 import smtplib
 import threading
+from dotenv import load_dotenv
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
@@ -14,17 +15,18 @@ import numpy as np
 
 app = Flask(__name__)
 CORS(app)
+load_dotenv()
 
 # ─────────────────────────────────────────────────────────────
 #  📧  EMAIL CONFIGURATION  — fill these in before running
 # ─────────────────────────────────────────────────────────────
 # SENDER: Use a Gmail account. Generate an App Password at:
 #   https://myaccount.google.com/apppasswords  (2FA must be ON)
-ALERT_SENDER_EMAIL    = os.environ.get("KINETICS_SENDER_EMAIL",   "sathvikamahale256@gmail.com")
-ALERT_SENDER_PASSWORD = os.environ.get("KINETICS_SENDER_PASS",    "kdhf qyrv gulc hvjj")
+ALERT_SENDER_EMAIL    = os.environ.get("KINETICS_SENDER_EMAIL") or os.environ.get("ALERT_EMAIL_SENDER", "")
+ALERT_SENDER_PASSWORD = os.environ.get("KINETICS_SENDER_PASS") or os.environ.get("ALERT_EMAIL_PASSWORD", "")
 
 # RECIPIENT: Your teammate's email
-ALERT_RECIPIENT_EMAIL = os.environ.get("KINETICS_RECIPIENT_EMAIL", "chiragmehta6oct@gmail.com")
+ALERT_RECIPIENT_EMAIL = os.environ.get("KINETICS_RECIPIENT_EMAIL") or os.environ.get("ALERT_EMAIL_RECEIVER", "")
 
 PATIENT_NAME          = "Patient Arthur"          # displayed in the email
 COORDS_LAT            = 12.824589

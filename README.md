@@ -1,322 +1,217 @@
 # Fall Detection and Alert System Using Body Area Network
 
-[![Project Status](https://img.shields.io/badge/Status-100%25%20Complete-brightgreen)]()
+[![Status](https://img.shields.io/badge/Status-Active-success)]()
 [![Hardware](https://img.shields.io/badge/Hardware-ESP8266-blue)]()
-[![ML Model](https://img.shields.io/badge/ML-Python-green)]()
-[![Mobile](https://img.shields.io/badge/Mobile-Flutter-cyan)]()
-[![Cloud](https://img.shields.io/badge/Cloud-Render-purple)]()
+[![Backend](https://img.shields.io/badge/Backend-Flask-0aa)]()
+[![Dashboard](https://img.shields.io/badge/Dashboard-React%20%2B%20Vite-646cff)]()
+[![Deploy](https://img.shields.io/badge/Deploy-Render-7d42f4)]()
 
-## 🚀 Project Overview
+An end-to-end fall detection and alert platform that connects a wearable Body Area Network (BAN) to a cloud backend, ML inference pipeline, and a live monitoring dashboard. The system detects high-impact events, evaluates vitals, and automatically dispatches alerts with patient and location context.
 
-An intelligent IoT-based healthcare monitoring system that combines wearable sensors, machine learning, and mobile technology to detect falls in real-time and provide immediate emergency alerts. This comprehensive solution is designed to enhance safety for elderly individuals and people at risk of falls.
+## Table of contents
 
-## 📋 Table of Contents
-
-- [Features](#features)
-- [System Architecture](#system-architecture)
-- [Components](#components)
-- [Project Status](#project-status)
-- [Technologies Used](#technologies-used)
-- [Installation](#installation)
-- [Usage](#usage)
-- [API Documentation](#api-documentation)
+- [What this repository includes](#what-this-repository-includes)
+- [System architecture](#system-architecture)
+- [Key capabilities](#key-capabilities)
+- [Project structure](#project-structure)
+- [Setup and configuration](#setup-and-configuration)
+- [Run the backend API](#run-the-backend-api)
+- [Run the dashboard](#run-the-dashboard)
+- [Hardware sketch](#hardware-sketch)
+- [ML training and batch inference](#ml-training-and-batch-inference)
+- [n8n closed-loop workflow](#n8n-closed-loop-workflow)
+- [API reference](#api-reference)
+- [Alerting and notifications](#alerting-and-notifications)
+- [Deployment](#deployment)
+- [Security and privacy notes](#security-and-privacy-notes)
 - [Contributing](#contributing)
-- [Future Enhancements](#future-enhancements)
 - [License](#license)
 
-## ✨ Features
+## What this repository includes
 
-- **Real-time Health Monitoring**: Continuous tracking of heart rate, body temperature, and motion
-- **AI-Powered Fall Detection**: Machine learning model trained on 370,000+ data points
-- **GPS Location Tracking**: Precise location identification for emergency response
-- **Automated Alert System**: Instant email notifications to emergency contacts
-- **Nearby Hospital Locator**: Location-based identification of nearby healthcare facilities
-- **Health Data Translation**: Gen AI-powered interpretation of health metrics
-- **Mobile Dashboard**: Flutter-based mobile application for real-time monitoring
-- **Cloud Integration**: Scalable cloud infrastructure for data processing
+- A Flask backend that receives hardware telemetry, detects fall events, and pushes alerts.
+- A React + Vite operations dashboard (Kinetics) for live vitals, AI reasoning, and incident UI.
+- ML training scripts and feature engineering for fall classification.
+- A standalone ThingSpeak polling + ML prediction script for batch detection.
+- Hardware firmware for ESP8266-based BAN telemetry.
+- Optional n8n workflow for closed-loop incident triage and escalation.
 
-## 🏗️ System Architecture
+## System architecture
 
 ```
-┌─────────────────┐    ┌──────────────┐    ┌─────────────────┐
-│   Wrist Band    │────│  ThingSpeak  │────│  Cloud Backend  │
-│   (Sensors)     │    │   Platform   │    │   (ML + Alerts) │
-└─────────────────┘    └──────────────┘    └─────────────────┘
-         │                                            │
-         │              ┌──────────────┐              │
-         └──────────────│ Flutter App  │──────────────┘
-                        │   (Mobile)   │
-                        └──────────────┘
+Wearable sensors (ESP8266) ──► Flask API ──► Alerting (Email)
+                    │                        │
+                    ├────────► ThingSpeak ───┴──► ML classifier (batch/polling)
+                    │
+                    └────────► React Dashboard (live /run-prediction feed)
 ```
 
-## 🔧 Components
+## Key capabilities
 
-### 1. **Hardware Wrist Band** ✅ *Completed*
+- Real-time fall detection with configurable impact threshold.
+- Vitals telemetry (G-force, BPM, SpO2) streamed to a dashboard.
+- Multi-level alerting modes (critical fall, welfare check, clinical intervention).
+- Email dispatch with location context and automated messaging.
+- Nearby hospital lookup via Overpass API.
+- Closed-loop incident workflow (n8n) with triage and escalation logic.
 
-**Sensors Integrated:**
-- **MAX30100**: Heart rate and SpO2 sensor
-- **DS18B20**: Digital temperature sensor
-- **MPU6050**: 6-axis accelerometer and gyroscope
-- **Neo 6M GPS**: Location tracking module
-- **NodeMCU (ESP8266)**: Main microcontroller
+## Project structure
 
-**Data Pipeline:**
-- Real-time sensor data collection
-- WiFi connectivity for data transmission
-- Integration with ThingSpeak IoT platform
+```
+.
+├─ app.py                       # Flask backend (live API + alert modes)
+├─ fall_detection.py            # ThingSpeak polling + ML inference
+├─ requirements.txt
+├─ render.yaml                  # Render deployment config
+├─ dataset/                     # Training dataset + conversion helper
+├─ hardware_code/               # ESP8266 sketch
+├─ kinetics-dashboard/          # React + Vite UI
+├─ location_scripts/            # Alerting helpers and hospital lookup
+├─ models/                      # Trained models and scalers (generated)
+├─ n8n/                         # Closed-loop workflow + sample payload
+└─ training_scripts/            # Model training and evaluation
+```
 
-### 2. **ML Fall Detection Model** ✅ *Completed*
-
-**Model Specifications:**
-- **Dataset Size**: 370,000+ data points
-- **Classes**: Fall vs Non-Fall detection
-- **Output Files**: `model.pkl` and `scaler.pkl`
-- **Accuracy**: High precision binary classification
-- **Integration**: Real-time processing of ThingSpeak data
-
-### 3. **Location-Based Alert System** ✅ *Completed*
-
-**Features:**
-- GPS coordinate processing
-- Nearby hospital and healthcare center identification
-- SMTP email alert system via Gmail
-- Emergency contact notification
-- Location-aware response system
-
-### 4. **Gen AI Health Translation** ✅ *Completed*
-
-**Features:**
-- Advanced Gen AI integration for health data interpretation
-- Health data translation and analysis
-- BMI calculation and health insights
-- User-friendly health metric explanations
-- Personalized health recommendations
-- Real-time health status assessment
-
-### 5. **Cloud Infrastructure** ✅ *Completed*
-
-**Deployment Details:**
-- **Platform**: Render cloud deployment
-- **Services**: ML model hosting, alert system backend
-- **API Endpoints**: Real-time data processing
-- **Data Source**: Live ThingSpeak integration
-- **Scalability**: Auto-scaling cloud architecture
-
-### 6. **Flutter Mobile Application** ✅ *Completed*
-
-**Features:**
-- User registration and profile management
-- Real-time health dashboard
-- Live sensor data visualization
-- Fall detection status monitoring
-- Heart rate charts and trends
-- Gen AI health translations display
-- Emergency contact management
-- Intuitive user interface with real-time updates
-
-## 📊 Project Status
-
-| Component | Status | Progress |
-|-----------|--------|----------|
-| Hardware Wrist Band | ✅ Complete | 100% |
-| ML Fall Detection | ✅ Complete | 100% |
-| Alert System | ✅ Complete | 100% |
-| Cloud Infrastructure | ✅ Complete | 100% |
-| Gen AI Integration | ✅ Complete | 100% |
-| Flutter Mobile App | ✅ Complete | 100% |
-
-**Overall Progress: 100% Complete (6/6 modules)**
-
-## 🛠️ Technologies Used
-
-### Hardware
-- ESP8266 (NodeMCU)
-- MAX30100 Heart Rate Sensor
-- DS18B20 Temperature Sensor
-- MPU6050 Accelerometer/Gyroscope
-- Neo 6M GPS Module
-
-### Software & Platforms
-- **Programming Languages**: Python, C++ (Arduino), Dart (Flutter)
-- **IoT Platform**: ThingSpeak
-- **Machine Learning**: Python (Scikit-learn/TensorFlow)
-- **Cloud Platform**: Render
-- **Mobile Framework**: Flutter
-- **AI Integration**: Gen AI API
-- **Communication**: SMTP Gmail API
-- **Data Format**: JSON, CSV
-
-## 🚀 Installation
+## Setup and configuration
 
 ### Prerequisites
-- Python 3.8+
-- Arduino IDE
-- Flutter SDK
-- ThingSpeak account
-- Gmail account for SMTP
-- Render account for cloud deployment
 
-### Hardware Setup
-1. Connect all sensors to NodeMCU according to the wiring diagram
-2. Flash the Arduino code to NodeMCU
-3. Configure WiFi credentials and ThingSpeak API keys
-4. Assemble components into wristband housing
+- Python 3.9+ (backend, ML scripts)
+- Node.js 18+ (dashboard)
+- Arduino IDE (hardware sketch)
+- Gmail account with App Password (for SMTP alerts)
 
-### Software Setup
+### Environment variables (backend + alerts)
+
+The backend supports either KINETICS_* or ALERT_EMAIL_* names:
+
+```
+KINETICS_SENDER_EMAIL=your.sender@gmail.com
+KINETICS_SENDER_PASS=your_app_password
+KINETICS_RECIPIENT_EMAIL=recipient@example.com
+
+ALERT_EMAIL_SENDER=your.sender@gmail.com
+ALERT_EMAIL_PASSWORD=your_app_password
+ALERT_EMAIL_RECEIVER=recipient@example.com
+```
+
+These are read in [app.py](app.py) and [location_scripts/send_alert_email.py](location_scripts/send_alert_email.py).
+
+## Run the backend API
+
 ```bash
-# Clone the repository
-git clone https://github.com/Kunal70616c/Fall-Detection-and-Alert-System-Using-Body-Area-Network.git
-cd Fall-Detection-and-Alert-System-Using-Body-Area-Network
-
-# Install Python dependencies
+python -m venv .venv
+.
+.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-
-# Configure environment variables
-cp .env.example .env
-# Edit .env with your API keys and credentials
+python app.py
 ```
 
-### Cloud Deployment
-1. Deploy ML model and alert system to Render
-2. Configure ThingSpeak channel integration
-3. Set up SMTP email credentials
-4. Test API endpoints
+The API starts on http://localhost:5000.
 
-### Mobile App Setup
+## Run the dashboard
+
 ```bash
-# Navigate to Flutter app directory
-cd flutter_app
-
-# Install dependencies
-flutter pub get
-
-# Run the app
-flutter run
+cd kinetics-dashboard
+npm install
+npm run dev
 ```
 
-## 📱 Usage
+By default the dashboard polls `/run-prediction` on port 5000. Override with:
 
-### For End Users
-1. **Setup**: Wear the wristband and ensure proper sensor contact
-2. **Mobile App**: Download and install the Flutter mobile application
-3. **Registration**: Create user profile and add emergency contacts
-4. **Monitoring**: Real-time health data is automatically collected and displayed
-5. **Fall Detection**: System automatically detects falls and sends alerts
-6. **Health Insights**: View Gen AI-powered health translations and recommendations
-
-### For Developers
-```python
-# Example: Using the ML model
-from fall_detection import FallDetectionModel
-
-model = FallDetectionModel()
-prediction = model.predict(sensor_data)
-print(f"Fall Detected: {prediction}")
+```
+VITE_API_URL=http://localhost:5000/run-prediction
 ```
 
-## 📡 API Documentation
+## Hardware sketch
 
-### Endpoints
+The ESP8266 firmware is in [hardware_code/data_Node_code.ino](hardware_code/data_Node_code.ino).
 
+It reads:
 
-#### Fall Detection Endpoint
+- MPU6050 (accelerometer/gyro)
+- MAX30100 (heart rate)
+
+Update WiFi credentials and flash via Arduino IDE. The sketch currently prints telemetry to serial; wire this to your actual payload sender as needed.
+
+## ML training and batch inference
+
+### Train and export models
+
+Training scripts are in [training_scripts](training_scripts) and use the CSV in [dataset/fall_dataset.csv](dataset/fall_dataset.csv).
+
+Example:
+
+```bash
+python training_scripts/train_random_forest.py
 ```
-POST /api/fall-detection
-Body: Sensor data array (accelerometer, heart rate, temperature)
-```
 
-**Response Format:**
+Artifacts are saved to [models](models), typically `fall_detection_model.pkl` and `scaler.pkl`.
+
+### Batch inference (ThingSpeak polling)
+
+[fall_detection.py](fall_detection.py) pulls the latest sensor window from ThingSpeak, extracts features, runs inference, and sends an alert using [location_scripts/send_alert_email.py](location_scripts/send_alert_email.py).
+
+The ThingSpeak API keys and channel IDs are currently hardcoded in that file; replace them for your deployment.
+
+## n8n closed-loop workflow
+
+The [n8n](n8n) folder includes a workflow that validates incoming payloads, triages risk, executes interventions, and verifies acknowledgements. Import instructions are in [n8n/README.md](n8n/README.md).
+
+## API reference
+
+### POST /api/aegis
+
+Receives telemetry from the wearable hardware.
+
 ```json
-// When fall is detected
 {
-    "status": "success",
-    "fall_detected": true,
-    "location": {
-        "latitude": 22.5726,
-        "longitude": 88.3639
-    }
-}
-
-// When no fall is detected
-{
-    "status": "success",
-    "fall_detected": false
+    "token": "AEGIS_AUTH_774",
+    "event": "HIGH IMPACT FALL",
+    "gForce": 17.6,
+    "bpm": 108,
+    "o2": 88,
+    "location": "12.824589,80.046896"
 }
 ```
 
-#### Alert System Endpoint
-```
-POST /api/send-alert
-Body: Location and user data
-Returns: Alert status and nearby hospitals
-```
+Response:
 
-#### Gen AI Health Translation Endpoint
-```
-POST /api/health-translation
-Body: Health metrics and user data
-Returns: AI-powered health insights and recommendations
+```json
+{
+    "status": "data_received",
+    "isFall": true
+}
 ```
 
-## 🤝 Contributing
+### GET /run-prediction
 
-We welcome contributions to improve this fall detection system!
+Polled by the dashboard every second and returns current vitals plus patient metadata.
 
-### How to Contribute
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+## Alerting and notifications
 
-### Areas for Enhancement
-- [ ] Advanced sensor integration
-- [ ] Enhanced Gen AI capabilities
-- [ ] Performance optimizations
-- [ ] Additional mobile app features
-- [ ] Testing and validation improvements
-- [ ] Documentation enhancements
+The backend supports three alert modes in [app.py](app.py):
 
-## 🔮 Future Enhancements
+- Mode C: fall detected (immediate emergency dispatch)
+- Mode B: abnormal vitals (clinical intervention)
+- Mode A: minor trip/stumble (welfare check)
 
-### Immediate Improvements
-- [ ] Enhanced Gen AI health prediction models
-- [ ] Advanced mobile app analytics
-- [ ] Multi-language support
-- [ ] Improved user interface design
+Each alert is rate-limited per event to avoid spam. The email templates include vitals and location context.
 
-### Long-term Vision
-- [ ] Multi-user family monitoring dashboard
-- [ ] Integration with hospital emergency systems
-- [ ] Advanced predictive health analytics
-- [ ] Wearable device miniaturization
-- [ ] Voice assistant integration
-- [ ] Telemedicine platform integration
+## Deployment
 
-## 📄 License
+Render is preconfigured via [render.yaml](render.yaml). It installs `requirements.txt` and runs `gunicorn app:app`.
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## Security and privacy notes
 
-## 👨‍💻 Authors
+- Never commit real credentials. Use environment variables instead.
+- Consider redacting patient identifiers in logs before production use.
+- Secure the hardware token and rotate it if a device is replaced.
 
-**Kunal Pal** - [Kunal70616c](https://github.com/Kunal70616c)
+## Contributing
 
-**Indranil Kundu** - [Orton1269](https://github.com/Orton1269)
+Contributions are welcome. If you plan large changes, open an issue to discuss the approach first.
 
-## 🙏 Acknowledgments
+## License
 
-- ThingSpeak for IoT platform services
-- Gen AI for health data interpretation
-- Open source sensor libraries and communities
-- Contributors and testers
-- Flutter community for mobile development support
-
-## 📞 Support
-
-For support, email kunal.cs.dev@outlook.com or create an issue in this repository.
-
----
-
-⭐ **Star this repository if you found it helpful!**
-
-**Made with ❤️ for safer living**
+This project is licensed under the MIT License. See [LICENSE](LICENSE).

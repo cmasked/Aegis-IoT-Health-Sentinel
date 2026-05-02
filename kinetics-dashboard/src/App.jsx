@@ -2,14 +2,13 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 
 // ─── API & CONSTANTS ──────────────────────────────────────────────────────────
-const API_URL        = 'http://' + window.location.hostname + ':5000/run-prediction';
+const API_URL        = import.meta.env.VITE_API_URL || `${window.location.protocol}//${window.location.hostname}:5000/run-prediction`;
 const MAX_HISTORY    = 40;
 const POLL_INTERVAL  = 1000;
 const COORDS_LAT     = 12.824589;
 const COORDS_LNG     = 80.046896;
-const COORDS         = `${COORDS_LAT}, ${COORDS_LNG}`;
-const MAPS_EMBED_URL = `https://maps.google.com/maps?q=${COORDS_LAT},${COORDS_LNG}&z=15&output=embed`;
 const MAPS_OPEN_URL  = `https://www.google.com/maps?q=${COORDS_LAT},${COORDS_LNG}`;
+const OSM_EMBED_URL  = (lat, lng) => `https://www.openstreetmap.org/export/embed.html?layer=mapnik&marker=${lat}%2C${lng}`;
 const SRM_MAPS_URL   = 'https://www.google.com/maps/place/SRM+Global+Hospitals/@12.82617,80.0414635,17z';
 const NEARBY_HOSPITALS = [
   { name: 'SRM Global Hospitals',           dist: '1.2 km', alerted: true,  mapsUrl: SRM_MAPS_URL },
@@ -42,6 +41,14 @@ function buildMessage(isFall, gForce, bpm, o2, name = 'Patient') {
 }
 const nowLabel = () => new Date().toLocaleTimeString('en-IN', { hour12: false });
 const nowFull  = () => new Date().toLocaleString('en-IN', { weekday: 'short', hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+function parseCoords(locationValue) {
+  if (typeof locationValue !== 'string') return { lat: COORDS_LAT, lng: COORDS_LNG };
+  const [latRaw, lngRaw] = locationValue.split(',').map((x) => x.trim());
+  const lat = Number(latRaw);
+  const lng = Number(lngRaw);
+  if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+  return { lat: COORDS_LAT, lng: COORDS_LNG };
+}
 
 // ─── REGISTRATION PAGE ────────────────────────────────────────────────────────
 const DEFAULT_FORM = {
@@ -491,7 +498,13 @@ function PatientStrip({ patient }) {
 }
 
 // ─── EMERGENCY OVERLAY ────────────────────────────────────────────────────────
-function EmergencyOverlay({ onDismiss }) {
+function EmergencyOverlay({ onDismiss, location }) {
+  const [mapFailed, setMapFailed] = useState(false);
+  const { lat, lng } = parseCoords(location);
+  const coordsLabel = `${lat}, ${lng}`;
+  const mapsOpenUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+  const mapsEmbedUrl = OSM_EMBED_URL(lat, lng);
+
   return (
     <div className="em-overlay" role="alertdialog" aria-modal="true">
       <div className="em-panel">
@@ -500,13 +513,21 @@ function EmergencyOverlay({ onDismiss }) {
         <div className="em-title">FALL DETECTED</div>
 
         <div style={{ borderRadius: 10, overflow: 'hidden', margin: '12px 0 8px', border: '2px solid rgba(255,255,255,0.4)' }}>
-          <iframe title="Fall Location Map" src={MAPS_EMBED_URL} width="100%" height="190"
-            style={{ border: 0, display: 'block' }} allowFullScreen loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
+          {!mapFailed ? (
+            <iframe title="Fall Location Map" src={mapsEmbedUrl} width="100%" height="190"
+              style={{ border: 0, display: 'block' }} allowFullScreen loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade" onError={() => setMapFailed(true)} />
+          ) : (
+            <div style={{ padding: 16, textAlign: 'center', background: 'rgba(0,0,0,0.2)' }}>
+              <div style={{ marginBottom: 8 }}>Map preview unavailable in this network/browser.</div>
+              <a href={mapsOpenUrl} target="_blank" rel="noopener noreferrer" className="em-maps-btn">🗺️ Open Maps</a>
+            </div>
+          )}
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-          <div className="em-coords" style={{ flex: 1, margin: 0 }}>📍 {COORDS}</div>
-          <a href={MAPS_OPEN_URL} target="_blank" rel="noopener noreferrer" className="em-maps-btn">🗺️ Open Maps</a>
+          <div className="em-coords" style={{ flex: 1, margin: 0 }}>📍 {coordsLabel}</div>
+          <a href={mapsOpenUrl} target="_blank" rel="noopener noreferrer" className="em-maps-btn">🗺️ Open Maps</a>
         </div>
 
         <hr className="em-divider" />
@@ -591,7 +612,7 @@ export default function App() {
 
   return (
     <div className={`app-shell${vitals.isFall || alarmActive ? ' app-shell--emergency' : ''}`}>
-      {showOverlay && <EmergencyOverlay onDismiss={() => setAlarmActive(false)} />}
+      {showOverlay && <EmergencyOverlay onDismiss={() => setAlarmActive(false)} location={vitals.location} />}
 
       <CommandCenter time={clock} isFall={vitals.isFall} />
       <PatientStrip patient={vitals.patient} />

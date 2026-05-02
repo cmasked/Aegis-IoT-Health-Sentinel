@@ -1,0 +1,212 @@
+{
+  "name": "AEGIS Closed-Loop Incident Orchestrator",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "aegis-incident",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "WebhookIngest",
+      "name": "Webhook Ingest",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $json.body ?? $json;\nconst required = ['token', 'event', 'gForce', 'bpm', 'o2'];\nconst missing = required.filter((k) => input[k] === undefined || input[k] === null || input[k] === '');\nconst g = Number(input.gForce);\nconst bpm = Number(input.bpm);\nconst o2 = Number(input.o2);\nconst errors = [];\nif (missing.length) errors.push(`Missing fields: ${missing.join(', ')}`);\nif (Number.isNaN(g)) errors.push('gForce must be numeric');\nif (Number.isNaN(bpm)) errors.push('bpm must be numeric');\nif (Number.isNaN(o2)) errors.push('o2 must be numeric');\nif (input.token && input.token !== 'AEGIS_AUTH_774') errors.push('Invalid hardware token');\nconst isValid = errors.length === 0;\nreturn [{\n  json: {\n    isValid,\n    errors,\n    receivedAt: new Date().toISOString(),\n    incidentSeed: Date.now(),\n    patientId: input.patientId || 'KIN-2024-0047',\n    location: input.location || '12.824589,80.046896',\n    event: String(input.event || 'UNKNOWN'),\n    gForce: Number.isNaN(g) ? null : g,\n    bpm: Number.isNaN(bpm) ? null : bpm,\n    o2: Number.isNaN(o2) ? null : o2,\n    ack: input.ack || {},\n    metadata: { source: 'iot_webhook', workflow: 'closed_loop_v1' }\n  }\n}];"
+      },
+      "id": "ValidateNormalize",
+      "name": "Validate and Normalize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.isValid}}",
+              "operation": "isTrue"
+            }
+          ]
+        }
+      },
+      "id": "IsValid",
+      "name": "Is Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        760,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    status: 'invalid_request',\n    statusCode: 400,\n    incidentId: null,\n    message: 'Payload validation failed',\n    errors: $json.errors || ['Unknown validation error'],\n    requiredSchema: {\n      token: 'string',\n      event: 'string',\n      gForce: 'number',\n      bpm: 'number',\n      o2: 'number',\n      location: 'string (optional)',\n      patientId: 'string (optional)',\n      ack: 'object (optional)'\n    },\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "BuildInvalid",
+      "name": "Build Invalid Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1020,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const FALL_THRESHOLD = 15;\nconst g = $json.gForce;\nconst bpm = $json.bpm;\nconst o2 = $json.o2;\nconst event = ($json.event || '').toUpperCase();\nconst keywordFall = ['FALL', 'IMPACT', 'EMERGENCY'].some((k) => event.includes(k));\nconst isFall = keywordFall || g >= FALL_THRESHOLD;\nlet severity = 'LOW';\nlet riskScore = 0.20;\nif (isFall) {\n  severity = 'CRITICAL';\n  riskScore = 0.95;\n} else if ((bpm > 100 || o2 < 90) && bpm > 0 && o2 > 0) {\n  severity = 'HIGH';\n  riskScore = 0.82;\n} else if (g >= 3) {\n  severity = 'MEDIUM';\n  riskScore = 0.55;\n}\nconst incidentId = `INC-${$json.patientId}-${$json.incidentSeed}`;\nconst playbook = {\n  CRITICAL: { actions: ['dispatch_ambulance', 'notify_neighbor', 'notify_doctor'], slaSeconds: 90, expectedProof: ['ambulance_ack', 'neighbor_ack'] },\n  HIGH: { actions: ['notify_doctor', 'notify_neighbor'], slaSeconds: 120, expectedProof: ['doctor_ack'] },\n  MEDIUM: { actions: ['notify_neighbor'], slaSeconds: 300, expectedProof: ['neighbor_ack'] },\n  LOW: { actions: ['log_only'], slaSeconds: 0, expectedProof: [] }\n};\nreturn [{\n  json: {\n    ...$json,\n    incidentId,\n    isFall,\n    severity,\n    riskScore,\n    state: 'triaged',\n    playbook: playbook[severity],\n    triageReasoning: isFall\n      ? 'Fall detected by impact threshold or event keyword'\n      : (severity === 'HIGH'\n          ? 'Vitals out of safe range'\n          : severity === 'MEDIUM'\n            ? 'Instability detected; preventive intervention required'\n            : 'No immediate risk, observation mode')\n  }\n}];"
+      },
+      "id": "RiskTriage",
+      "name": "Risk Triage",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1020,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date();\nconst actions = $json.playbook.actions || [];\nconst interventions = actions.map((action, idx) => ({\n  interventionId: `${$json.incidentId}-A${idx + 1}`,\n  action,\n  channel: action.includes('notify') ? 'sms_email' : (action === 'dispatch_ambulance' ? 'dispatch_api' : 'internal'),\n  dispatchedAt: now.toISOString(),\n  status: action === 'log_only' ? 'completed' : 'dispatched'\n}));\nreturn [{\n  json: {\n    ...$json,\n    state: 'action_dispatched',\n    interventions,\n    firstActionAt: now.toISOString(),\n    verificationDeadline: new Date(now.getTime() + ($json.playbook.slaSeconds || 0) * 1000).toISOString()\n  }\n}];"
+      },
+      "id": "ExecuteInterventions",
+      "name": "Execute Interventions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const expectedProof = $json.playbook.expectedProof || [];\nconst ack = $json.ack || {};\nconst receivedProof = {\n  ambulance_ack: !!ack.ambulance,\n  neighbor_ack: !!ack.neighbor,\n  doctor_ack: !!ack.doctor,\n  patient_ack: !!ack.patient\n};\nconst missingProof = expectedProof.filter((k) => !receivedProof[k]);\nlet state = 'verified_resolved';\nlet escalated = false;\nlet nextAction = 'close_incident';\nif (missingProof.length > 0) {\n  state = $json.severity === 'CRITICAL' ? 'escalated' : 'verification_pending';\n  escalated = $json.severity === 'CRITICAL';\n  nextAction = escalated ? 'escalate_to_backup_chain' : 'await_ack_or_retry';\n}\nconst t0 = new Date($json.receivedAt).getTime();\nconst t1 = new Date($json.firstActionAt).getTime();\nconst timeToFirstActionSeconds = Math.max(0, Math.round((t1 - t0) / 1000));\nreturn [{\n  json: {\n    status: 'ok',\n    statusCode: 200,\n    incidentId: $json.incidentId,\n    patientId: $json.patientId,\n    severity: $json.severity,\n    riskScore: $json.riskScore,\n    state,\n    isFall: $json.isFall,\n    telemetry: {\n      event: $json.event,\n      gForce: $json.gForce,\n      bpm: $json.bpm,\n      o2: $json.o2,\n      location: $json.location\n    },\n    triageReasoning: $json.triageReasoning,\n    interventions: $json.interventions,\n    verification: {\n      expectedProof,\n      receivedProof,\n      missingProof,\n      deadline: $json.verificationDeadline,\n      escalated,\n      nextAction\n    },\n    kpis: {\n      timeToFirstActionSeconds,\n      interventionCount: ($json.interventions || []).length\n    },\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "VerifyEscalate",
+      "name": "Verify and Escalate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{$json}}",
+        "options": {}
+      },
+      "id": "Respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1800,
+        320
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook Ingest": {
+      "main": [
+        [
+          {
+            "node": "Validate and Normalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate and Normalize": {
+      "main": [
+        [
+          {
+            "node": "Is Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Valid?": {
+      "main": [
+        [
+          {
+            "node": "Risk Triage",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Invalid Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Risk Triage": {
+      "main": [
+        [
+          {
+            "node": "Execute Interventions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Interventions": {
+      "main": [
+        [
+          {
+            "node": "Verify and Escalate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify and Escalate": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Invalid Response": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "aegis-closed-loop-v1"
+}

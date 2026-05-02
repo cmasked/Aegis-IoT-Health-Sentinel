@@ -1,0 +1,15 @@
+{
+  "token": "AEGIS_AUTH_774",
+  "patientId": "KIN-2024-0047",
+  "event": "HIGH IMPACT FALL",
+  "gForce": 17.6,
+  "bpm": 108,
+  "o2": 88,
+  "location": "12.824589,80.046896",
+  "ack": {
+    "ambulance": false,
+    "neighbor": true,
+    "doctor": false,
+    "patient": false
+  }
+}
