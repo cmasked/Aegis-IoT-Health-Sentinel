@@ -1,4 +1,4 @@
-# Fall Detection and Alert System Using Body Area Network
+# Aegis — IoT Health Sentinel
 
 [![Status](https://img.shields.io/badge/Status-Active-success)]()
 [![Hardware](https://img.shields.io/badge/Hardware-ESP8266-blue)]()
@@ -6,7 +6,13 @@
 [![Dashboard](https://img.shields.io/badge/Dashboard-React%20%2B%20Vite-646cff)]()
 [![Deploy](https://img.shields.io/badge/Deploy-Render-7d42f4)]()
 
-An end-to-end fall detection and alert platform that connects a wearable Body Area Network (BAN) to a cloud backend, ML inference pipeline, and a live monitoring dashboard. The system detects high-impact events, evaluates vitals, and automatically dispatches alerts with patient and location context.
+> Aegis moves beyond passive monitoring. It is a full-stack SaaS health
+> ecosystem where the hardware acts as the enabler and the software acts
+> as the intelligent caretaker — distinguishing between acute emergencies
+> that need immediate intervention and chronic degradation that needs
+> long-term care routing.
+
+An end-to-end fall detection and alert platform that connects a wearable Body Area Network (BAN) to a cloud backend, ML inference pipeline, and a live monitoring dashboard. The system detects high-impact events, evaluates vitals, and automatically dispatches alerts with patient and location context, while supporting Environment-as-a-Service responses and the Shanti Protocol for chronic care routing.
 
 ## Table of contents
 
@@ -38,12 +44,13 @@ An end-to-end fall detection and alert platform that connects a wearable Body Ar
 
 ## System architecture
 
-```
-Wearable sensors (ESP8266) ──► Flask API ──► Alerting (Email)
-                    │                        │
-                    ├────────► ThingSpeak ───┴──► ML classifier (batch/polling)
-                    │
-                    └────────► React Dashboard (live /run-prediction feed)
+```mermaid
+flowchart LR
+    S[Wearable sensors\nESP8266 BAN] --> API[Flask API\n/api/aegis]
+    API --> ALERTS[Alerting\nEmail + Overpass]
+    S --> TS[ThingSpeak]
+    TS --> ML[ML classifier\nBatch/polling]
+    API --> UI[React dashboard\n/run-prediction]
 ```
 
 ## Key capabilities
@@ -54,6 +61,15 @@ Wearable sensors (ESP8266) ──► Flask API ──► Alerting (Email)
 - Email dispatch with location context and automated messaging.
 - Nearby hospital lookup via Overpass API.
 - Closed-loop incident workflow (n8n) with triage and escalation logic.
+- Environment-as-a-Service response layer for physical interventions.
+- Proof of Life status on the dashboard — caregivers see continuous
+    presence confirmation, not just alerts when something goes wrong.
+- Diya Mode — on a confirmed fall, integrated relays trigger ambient
+    lighting changes in the patient's environment to guide responders
+    and reduce panic.
+- Smart door unlock via relay actuation — paramedic access without
+    waiting for someone to physically open the door.
+- Shanti Protocol routing for chronic degradation without alarm fatigue.
 
 ## Project structure
 
@@ -132,7 +148,7 @@ It reads:
 - MPU6050 (accelerometer/gyro)
 - MAX30100 (heart rate)
 
-Update WiFi credentials and flash via Arduino IDE. The sketch currently prints telemetry to serial; wire this to your actual payload sender as needed.
+Update WiFi credentials and flash via Arduino IDE. The sketch currently prints telemetry to serial; for live ingestion, add a simple HTTP POST to `/api/aegis` or a ThingSpeak write call.
 
 ## ML training and batch inference
 
@@ -152,7 +168,7 @@ Artifacts are saved to [models](models), typically `fall_detection_model.pkl` an
 
 [fall_detection.py](fall_detection.py) pulls the latest sensor window from ThingSpeak, extracts features, runs inference, and sends an alert using [location_scripts/send_alert_email.py](location_scripts/send_alert_email.py).
 
-The ThingSpeak API keys and channel IDs are currently hardcoded in that file; replace them for your deployment.
+ThingSpeak channel credentials are configured via environment variables — see Setup and configuration.
 
 ## n8n closed-loop workflow
 
@@ -197,6 +213,20 @@ The backend supports three alert modes in [app.py](app.py):
 - Mode A: minor trip/stumble (welfare check)
 
 Each alert is rate-limited per event to avoid spam. The email templates include vitals and location context.
+
+## Response protocols
+
+Aegis classifies every event into one of two tracks:
+
+**Acute emergencies** — high G-force impact with abnormal vitals triggers
+Mode C: immediate email dispatch, nearby hospital lookup via Overpass API,
+relay actuation (door unlock + Diya Mode lighting), and n8n escalation.
+
+**Chronic degradation** — sustained anomalies without a fall event trigger
+the Shanti Protocol: a slower, non-alarming care pathway that routes the
+patient toward traditional medical consultation rather than emergency
+services. This distinction prevents alert fatigue for caregivers of
+patients with chronic cardiac conditions.
 
 ## Deployment
 
