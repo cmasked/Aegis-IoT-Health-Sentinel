@@ -13,6 +13,8 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 import joblib
+import requests
+import json
 from scipy.stats import skew, kurtosis
 from agent.agent_actions import agent_order_blinkit_ambulance
 
@@ -438,8 +440,28 @@ def receive_data():
         except Exception as e:
             print(f"[ML ERROR] Failed to run prediction: {e}")
 
-    # ── 5. Reasoning ─────────────────────────────────────────
+    # ── 5. Reasoning & TRUE AGENTIC DECISION ─────────────────
     reasoning = build_reasoning(event, g, bpm, o2, is_fall)
+    agent_dispatch_decision = False
+    
+    if is_fall:
+        gemini_key = os.environ.get("GEMINI_API_KEY")
+        if gemini_key and gemini_key != "your_gemini_api_key_here":
+            try:
+                print("🧠 [LLM AGENT] Reasoning about dispatch...")
+                prompt = f"Patient vitals: G-Force: {g}g, BPM: {bpm}, SpO2: {o2}%. ML Fall Detected: True. Is this a critical emergency requiring immediate ambulance dispatch? Reply exactly in JSON: {{\"dispatch\": true/false, \"reasoning\": \"short explanation\"}}"
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_key}"
+                resp = requests.post(url, json={"contents": [{"parts": [{"text": prompt}]}]}).json()
+                text = resp['candidates'][0]['content']['parts'][0]['text']
+                if "true" in text.lower():
+                    agent_dispatch_decision = True
+                reasoning = "🤖 LLM Agent Decision: " + text.replace('\n', ' ')
+            except Exception as e:
+                print(f"❌ [LLM AGENT] Error: {e}")
+                agent_dispatch_decision = True # Fallback
+        else:
+            # Fallback to rules-based dispatch if no API key
+            agent_dispatch_decision = True
 
     # ── 6. Commit state ──────────────────────────────────────
     current_vitals.update({
@@ -462,12 +484,13 @@ def receive_data():
         threading.Thread(target=send_fall_alert_email, args=(g, bpm, o2), daemon=True).start()
         
         # 🤖 TRUE AGENTIC TRIGGER
-        print("🤖 [AGENT OVERRIDE] Fall confirmed. Initiating Agentic Workflow for Blinkit Ambulance!")
-        try:
-            lat, lng = location.split(',') if ',' in location else (COORDS_LAT, COORDS_LNG)
-            threading.Thread(target=agent_order_blinkit_ambulance, args=(lat, lng), daemon=True).start()
-        except Exception as e:
-            print(f"❌ Failed to spawn Agentic thread: {e}")
+        if agent_dispatch_decision:
+            print("🤖 [AGENT OVERRIDE] LLM confirmed emergency. Initiating Agentic Workflow for Blinkit Ambulance!")
+            try:
+                lat, lng = location.split(',') if ',' in location else (COORDS_LAT, COORDS_LNG)
+                threading.Thread(target=agent_order_blinkit_ambulance, args=(lat, lng), daemon=True).start()
+            except Exception as e:
+                print(f"❌ Failed to spawn Agentic thread: {e}")
     elif not mode_c:
         _fall_email_sent = False
 
