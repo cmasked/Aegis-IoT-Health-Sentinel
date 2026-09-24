@@ -12,10 +12,22 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
+import joblib
+from scipy.stats import skew, kurtosis
+from agent.agent_actions import agent_order_blinkit_ambulance
 
 app = Flask(__name__)
 CORS(app)
 load_dotenv()
+
+# Load ML Models
+try:
+    ml_scaler = joblib.load('models/scaler.pkl')
+    ml_model = joblib.load('models/fall_detection_model.pkl')
+    print("✅ ML Model loaded successfully.")
+except Exception as e:
+    ml_scaler, ml_model = None, None
+    print(f"⚠️ ML Model not found: {e}. Falling back to threshold mode.")
 
 # ─────────────────────────────────────────────────────────────
 #  📧  EMAIL CONFIGURATION  — fill these in before running
@@ -398,6 +410,34 @@ def receive_data():
     # ── 4. Derive isFall ─────────────────────────────────────
     is_fall  = is_fall_event(event, g)
 
+    # ── 4.5. ML Override (if window data provided) ───────────
+    window = data.get("window", [])
+    if window and len(window) == 6 and ml_model is not None:
+        try:
+            window_np = np.array(window)
+            accel_mag = np.linalg.norm(window_np[:, 0:3], axis=1)
+            gyro_mag = np.linalg.norm(window_np[:, 3:6], axis=1)
+
+            signals = {
+                'ax': window_np[:, 0], 'ay': window_np[:, 1], 'az': window_np[:, 2],
+                'gx': window_np[:, 3], 'gy': window_np[:, 4], 'gz': window_np[:, 5],
+                'accel_mag': accel_mag, 'gyro_mag': gyro_mag
+            }
+
+            features = []
+            for sig in signals.values():
+                features.extend([
+                    float(np.mean(sig)), float(np.std(sig)), float(np.max(sig)), float(np.min(sig)),
+                    float(skew(sig)), float(kurtosis(sig))
+                ])
+            features_scaled = ml_scaler.transform(np.array(features).reshape(1, -1))
+            prediction = ml_model.predict(features_scaled)[0]
+            is_fall = bool(prediction == 1)
+            if is_fall and "FALL" not in event.upper():
+                event = "HIGH IMPACT FALL (ML DETECTED)"
+        except Exception as e:
+            print(f"[ML ERROR] Failed to run prediction: {e}")
+
     # ── 5. Reasoning ─────────────────────────────────────────
     reasoning = build_reasoning(event, g, bpm, o2, is_fall)
 
@@ -420,6 +460,14 @@ def receive_data():
     if mode_c and not _fall_email_sent:
         _fall_email_sent = True
         threading.Thread(target=send_fall_alert_email, args=(g, bpm, o2), daemon=True).start()
+        
+        # 🤖 TRUE AGENTIC TRIGGER
+        print("🤖 [AGENT OVERRIDE] Fall confirmed. Initiating Agentic Workflow for Blinkit Ambulance!")
+        try:
+            lat, lng = location.split(',') if ',' in location else (COORDS_LAT, COORDS_LNG)
+            threading.Thread(target=agent_order_blinkit_ambulance, args=(lat, lng), daemon=True).start()
+        except Exception as e:
+            print(f"❌ Failed to spawn Agentic thread: {e}")
     elif not mode_c:
         _fall_email_sent = False
 
