@@ -2,7 +2,11 @@ import os
 import time
 import json
 import requests
+from dotenv import load_dotenv
 from playwright.sync_api import sync_playwright
+
+# Load environment variables from .env
+load_dotenv()
 
 def agent_order_blinkit_ambulance(lat, lng):
     """
