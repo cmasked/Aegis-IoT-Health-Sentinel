@@ -35,7 +35,7 @@ You can choose ONE of the following actions:
 
 Respond ONLY with valid JSON.
 """
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={gemini_key}"
         try:
             resp = requests.post(url, json={"contents": [{"parts": [{"text": prompt}]}]}).json()
             raw_text = resp['candidates'][0]['content']['parts'][0]['text']

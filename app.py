@@ -450,7 +450,7 @@ def receive_data():
             try:
                 print("🧠 [LLM AGENT] Reasoning about dispatch...")
                 prompt = f"Patient vitals: G-Force: {g}g, BPM: {bpm}, SpO2: {o2}%. ML Fall Detected: True. Is this a critical emergency requiring immediate ambulance dispatch? Reply exactly in JSON: {{\"dispatch\": true/false, \"reasoning\": \"short explanation\"}}"
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_key}"
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={gemini_key}"
                 resp = requests.post(url, json={"contents": [{"parts": [{"text": prompt}]}]}).json()
                 text = resp['candidates'][0]['content']['parts'][0]['text']
                 if "true" in text.lower():
